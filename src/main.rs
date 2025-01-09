@@ -15,7 +15,7 @@
 
 mod lib;
 
-use anyhow::{Ok, Result};
+use anyhow::Result;
 use core::str;
 use embedded_svc::{http::Method, io::Write};
 use esp_idf_svc::{
@@ -25,9 +25,11 @@ use esp_idf_svc::{
         prelude::*,
     },
     http::server::{Configuration, EspHttpServer},
+    io::{EspIOError, Read},
 };
 use lib::wifi::wifi;
 use shtcx::{self, shtc3, PowerMode};
+use std::result::Result::Ok;
 use std::{
     sync::{Arc, Mutex},
     thread::sleep,
@@ -62,13 +64,69 @@ fn main() -> Result<()> {
     // `EspHttpServer` instance using a default configuration
     let mut server = EspHttpServer::new(&Configuration::default())?;
 
-    server.fn_handler("/", Method::Get, |request| {
-        println!("request from: {:?}", request.header("user-agent"));
-        let html = index_html();
-        let mut response = request.into_ok_response()?;
-        response.write_all(html.as_bytes())?;
-        Ok(())
-    })?;
+    server.fn_handler(
+        "/",
+        Method::Get,
+        |request| -> core::result::Result<(), EspIOError> {
+            println!("request from: {:?}", request.header("user-agent"));
+            let html = index_html();
+            let mut response = request.into_ok_response()?;
+            response.write_all(html.as_bytes())?;
+            Ok(())
+        },
+    )?;
+
+    server.fn_handler(
+        "/",
+        Method::Post,
+        |mut request| -> core::result::Result<(), EspIOError> {
+            println!(
+                "request from: {:?}",
+                request.header("user-agent").unwrap_or("Unknown")
+            );
+            let (_headers, connection) = request.split();
+
+            const MAX_BODY_SIZE: usize = 4096; // 4KB
+            let mut buffer: Vec<u8> = Vec::with_capacity(MAX_BODY_SIZE);
+            let mut temp_buffer = [0u8; 1024];
+
+            loop {
+                let bytes_read = connection.read(&mut temp_buffer)?;
+
+                if bytes_read == 0 {
+                    break;
+                }
+
+                // exceed MAX_BODY_SIZE
+                if buffer.len() + bytes_read > MAX_BODY_SIZE {
+                    println!("Exceed the body size");
+                    let mut response = request.into_status_response(413)?;
+                    response.write_all(b"Payload Too Large")?;
+                    return Ok(());
+                }
+
+                buffer.extend_from_slice(&temp_buffer[..bytes_read]);
+            }
+
+            let body_str = match std::str::from_utf8(&buffer) {
+                Ok(s) => s,
+                Err(_) => {
+                    println!("Cuerpo de la solicitud no es UTF-8 válido");
+                    let mut response = request.into_status_response(400)?;
+                    response.write_all(b"Invalid UTF-8 in body")?;
+                    return Ok(());
+                }
+            };
+
+            println!("request body: {:#?}", body_str);
+
+            let html = templated("post /");
+            let mut response = request.into_ok_response()?;
+
+            response.write_all(html.as_bytes())?;
+            Ok(())
+        },
+    )?;
 
     println!("Server awaiting connection");
 
