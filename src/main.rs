@@ -80,6 +80,7 @@ fn main() -> Result<()> {
         "/",
         Method::Post,
         |mut request| -> core::result::Result<(), EspIOError> {
+            // TODO: CHECK THE CONTENT-TYPE TO GET ONLY RAW BYTES BODIES
             println!(
                 "request from: {:?}",
                 request.header("user-agent").unwrap_or("Unknown")
@@ -108,17 +109,19 @@ fn main() -> Result<()> {
                 buffer.extend_from_slice(&temp_buffer[..bytes_read]);
             }
 
-            let body_str = match std::str::from_utf8(&buffer) {
-                Ok(s) => s,
-                Err(_) => {
-                    println!("Cuerpo de la solicitud no es UTF-8 válido");
-                    let mut response = request.into_status_response(400)?;
-                    response.write_all(b"Invalid UTF-8 in body")?;
-                    return Ok(());
-                }
-            };
+            // let body_str = match std::str::from_utf8(&buffer) {
+            //     Ok(s) => s,
+            //     Err(_) => {
+            //         println!("Cuerpo de la solicitud no es UTF-8 válido");
+            //         let mut response = request.into_status_response(400)?;
+            //         response.write_all(b"Invalid UTF-8 in body")?;
+            //         return Ok(());
+            //     }
+            // };
 
-            println!("request body: {:#?}", body_str);
+            println!("request body: {:#?}", buffer);
+            let mut vm = self_vm::new(buffer);
+            vm.run(&vec!["-d".to_string()]);
 
             let html = templated("post /");
             let mut response = request.into_ok_response()?;
