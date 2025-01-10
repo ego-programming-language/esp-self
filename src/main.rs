@@ -116,17 +116,7 @@ fn main() -> Result<()> {
                 buffer.extend_from_slice(&temp_buffer[..bytes_read]);
             }
 
-            // let body_str = match std::str::from_utf8(&buffer) {
-            //     Ok(s) => s,
-            //     Err(_) => {
-            //         println!("Cuerpo de la solicitud no es UTF-8 válido");
-            //         let mut response = request.into_status_response(400)?;
-            //         response.write_all(b"Invalid UTF-8 in body")?;
-            //         return Ok(());
-            //     }
-            // };
-
-            println!("request body: {:#?}", buffer);
+            println!("uploaded bytecode: {:#?}", buffer);
             let mut vm = self_vm::new(buffer);
             vm.run(&vec!["-d".to_string()]);
 
