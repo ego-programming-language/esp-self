@@ -80,7 +80,14 @@ fn main() -> Result<()> {
         "/",
         Method::Post,
         |mut request| -> core::result::Result<(), EspIOError> {
-            // TODO: CHECK THE CONTENT-TYPE TO GET ONLY RAW BYTES BODIES
+            if request.header("content-type").unwrap_or("Unknown") != "application/octet-stream" {
+                println!("Bad request, content-type not \"application/octect-stream\"");
+                let mut response = request.into_status_response(400)?;
+                response
+                    .write_all(b"Bad request, content-type not \"application/octect-stream\"")?;
+                return Ok(());
+            }
+
             println!(
                 "request from: {:?}",
                 request.header("user-agent").unwrap_or("Unknown")
