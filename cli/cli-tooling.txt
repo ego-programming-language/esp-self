@@ -1,0 +1,14 @@
+##### convert elf file to .bin using esp-idf tooling
+xtensa-esp32-elf-objcopy -O binary elf_filename elf_filename.bin
+
+
+##### esp-rs espflash tooling
+# monitoring via uart
+espflash monitor 
+
+# flash firmware to device
+espflash flash --port /dev/cu.usbserial-120 --baud 115200 \
+  --flash-mode dio \
+  --flash-size 4mb \
+  --flash-freq 40mhz \
+  self-esp
