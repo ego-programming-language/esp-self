@@ -4,6 +4,9 @@ use std::{
     usize,
 };
 
+use espflash::{interface::Interface, targets::Chip};
+use miette::Error;
+use serial::{get_port_handler, get_serial_ports_name, get_usbport_info};
 use serialport::{SerialPortInfo, SerialPortType};
 
 mod serial;
@@ -11,23 +14,15 @@ mod serial;
 
 fn main() {
     println!("self-esp toolkit");
-
     println!("\n>>>> select port <<<<\n");
-    let ports = serial::detect_usb_serial_ports(true);
-    let mut port_names = vec![];
-    let ports = match ports {
-        Ok(ports) => {
-            port_names = ports
-                .iter()
-                .map(|port_info| port_info.port_name.clone())
-                .collect::<Vec<_>>();
-            ports
-        }
-        Err(_) => {
-            panic!("Error getting serial ports")
-        }
-    };
 
+    let ports = match serial::detect_usb_serial_ports(true) {
+        Ok(ports) => ports,
+        Err(_) => panic!("Cannot get ports"),
+    };
+    let port_names = serial::get_serial_ports_name(&ports);
+
+    // print portnames
     port_names
         .iter()
         .enumerate()
@@ -42,27 +37,43 @@ fn main() {
         .expect("Failed to read line");
 
     let input = input.trim();
-    let port_name = port_names[input
+    let selected_port = input
         .parse::<usize>()
-        .expect("Input must be a number within the options range")]
-    .clone();
+        .expect("Input must be a number within the options range");
+
+    let port_name = port_names[selected_port].clone();
     let baud_rate = 115200;
-    let port;
-
-    match serialport::new(port_name.clone(), baud_rate)
-        .timeout(Duration::from_millis(100)) // Set a timeout
-        .open() // Open the port
-    {
-        Ok(_port) => {
-            println!("Serial port {} opened successfully!", port_name);
-            port = _port;
+    //let port = get_port_handler(&port_name, baud_rate);
+    let port_info = match get_usbport_info(&port_name) {
+        Some(info) => info,
+        None => {
+            panic!("UsbPortInfo is a required info")
         }
-        Err(e) => {
-            eprintln!("Failed to open serial port: {}", e);
-        }
-    }
+    };
 
-    //serial::get_serial_port_info(, config);
+    let serialport_interface =
+        match espflash::interface::Interface::new(&ports[selected_port], None, None) {
+            Ok(interface) => interface,
+            Err(_) => {
+                panic!("Cannot get serialport interface")
+            }
+        };
+    let mut connection = espflash::connection::Connection::new(serialport_interface, port_info);
 
-    //espflash::connection::Connection::new(, );
+    /////BIG REFACTOR MUST BE DONE HERE/////
+    connection.begin().expect("error control");
+    connection
+        .set_timeout(Duration::from_secs(3))
+        .expect("error control");
+
+    let detected_chip = {
+        // Detect which chip we are connected to.
+        let magic = connection
+            .read_reg(0x40001000)
+            .expect("not magic number getted");
+        let detected_chip = Chip::from_magic(magic).expect("chip cannot be detected");
+        detected_chip
+    };
+
+    println!("{:#?}", detected_chip);
 }
