@@ -1,21 +1,25 @@
 use std::{
+    fs,
     io::{self, Write},
-    time::Duration,
+    path::Path,
     usize,
 };
 
-use espflash::{interface::Interface, targets::Chip};
-use miette::Error;
+use espflash::{flasher::Flasher, targets::Chip};
+use flasher::print_board_info;
+use miette::{Error, IntoDiagnostic, Result};
 use serial::{get_port_handler, get_serial_ports_name, get_usbport_info};
 use serialport::{SerialPortInfo, SerialPortType};
 
+mod flasher;
 mod serial;
-// use espflash::{self, flasher::Flasher, targets::Chip};
 
 fn main() {
     println!("self-esp toolkit");
     println!("\n>>>> select port <<<<\n");
 
+    /////// GET SERIAL PORT
+    ///////
     let ports = match serial::detect_usb_serial_ports(true) {
         Ok(ports) => ports,
         Err(_) => panic!("Cannot get ports"),
@@ -58,22 +62,10 @@ fn main() {
                 panic!("Cannot get serialport interface")
             }
         };
-    let mut connection = espflash::connection::Connection::new(serialport_interface, port_info);
 
-    /////BIG REFACTOR MUST BE DONE HERE/////
-    connection.begin().expect("error control");
-    connection
-        .set_timeout(Duration::from_secs(3))
-        .expect("error control");
-
-    let detected_chip = {
-        // Detect which chip we are connected to.
-        let magic = connection
-            .read_reg(0x40001000)
-            .expect("not magic number getted");
-        let detected_chip = Chip::from_magic(magic).expect("chip cannot be detected");
-        detected_chip
-    };
-
-    println!("{:#?}", detected_chip);
+    /////// FLASH ESP32
+    ///////
+    let mut flasher = Flasher::connect(*Box::new(serialport_interface), port_info, None, false)
+        .expect("cannot get the flasher object");
+    print_board_info(&mut flasher).expect("print cannot get board info");
 }
