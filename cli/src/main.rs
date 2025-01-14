@@ -5,11 +5,17 @@ use std::{
     usize,
 };
 
-use espflash::{flasher::Flasher, targets::Chip};
-use flasher::print_board_info;
-use miette::{Error, IntoDiagnostic, Result};
-use serial::{get_port_handler, get_serial_ports_name, get_usbport_info};
-use serialport::{SerialPortInfo, SerialPortType};
+use espflash::{
+    cli::print_board_info,
+    connection::reset::{ResetAfterOperation::HardReset, ResetBeforeOperation::DefaultReset},
+    flasher::{Flasher, ProgressCallbacks},
+    targets::Chip,
+};
+use indicatif::{ProgressBar, ProgressStyle};
+use serial::{
+    detect_usb_serial_ports, get_port_handler, get_serial_ports_name, get_serialport_info,
+    get_usbport_info,
+};
 
 mod flasher;
 mod serial;
@@ -18,15 +24,14 @@ fn main() {
     println!("self-esp toolkit");
     println!("\n>>>> select port <<<<\n");
 
-    /////// GET SERIAL PORT
+    /////// GET USER INPUT FOR SERIALPORT
     ///////
-    let ports = match serial::detect_usb_serial_ports(true) {
+    let ports = match detect_usb_serial_ports(true) {
         Ok(ports) => ports,
         Err(_) => panic!("Cannot get ports"),
     };
-    let port_names = serial::get_serial_ports_name(&ports);
+    let port_names = get_serial_ports_name(&ports);
 
-    // print portnames
     port_names
         .iter()
         .enumerate()
@@ -45,27 +50,48 @@ fn main() {
         .parse::<usize>()
         .expect("Input must be a number within the options range");
 
+    /////// GET SERIALPORT
+    ///////
     let port_name = port_names[selected_port].clone();
-    let baud_rate = 115200;
-    //let port = get_port_handler(&port_name, baud_rate);
-    let port_info = match get_usbport_info(&port_name) {
+    let serialport_info = match get_serialport_info(&port_name) {
         Some(info) => info,
         None => {
-            panic!("UsbPortInfo is a required info")
+            panic!("SerialPortInfo is a required info")
         }
     };
-
-    let serialport_interface =
-        match espflash::interface::Interface::new(&ports[selected_port], None, None) {
-            Ok(interface) => interface,
-            Err(_) => {
-                panic!("Cannot get serialport interface")
-            }
-        };
+    let usbport_info = get_usbport_info(&serialport_info);
+    let serialport = get_port_handler(&serialport_info);
 
     /////// FLASH ESP32
     ///////
-    let mut flasher = Flasher::connect(*Box::new(serialport_interface), port_info, None, false)
-        .expect("cannot get the flasher object");
+    let mut flasher = Flasher::connect(
+        *Box::new(serialport),
+        usbport_info,
+        Some(115_200),
+        false,
+        false,
+        false,
+        Some(Chip::Esp32),
+        HardReset,
+        DefaultReset,
+    )
+    .expect("Cannot get the flasher");
+
     print_board_info(&mut flasher).expect("print cannot get board info");
+
+    // DETECT USED CHIP
+    // let mut connection = espflash::connection::Connection::new(
+    //     *Box::new(serialport), // TTyPort
+    //     usbport_info,          // UsbPortInfo
+    //     HardReset,
+    //     DefaultReset,
+    // );
+    // let detected_chip = {
+    //     // Detect which chip we are connected to.
+    //     let magic = connection
+    //         .read_reg(0x40001000)
+    //         .expect("not magic number getted");
+    //     let detected_chip = Chip::from_magic(magic).expect("chip cannot be detected");
+    //     detected_chip
+    // };
 }

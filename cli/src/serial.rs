@@ -1,7 +1,9 @@
 use std::time::Duration;
 
-use miette::{IntoDiagnostic, Result};
-use serialport::{available_ports, SerialPort, SerialPortInfo, SerialPortType, UsbPortInfo};
+use miette::{Context, IntoDiagnostic, Result};
+use serialport::{
+    available_ports, FlowControl, SerialPort, SerialPortInfo, SerialPortType, TTYPort, UsbPortInfo,
+};
 
 // Returns a vector with available USB serial ports.
 #[cfg(not(all(target_os = "linux", target_env = "musl")))]
@@ -38,37 +40,37 @@ pub fn get_serial_ports_name(serialports: &Vec<SerialPortInfo>) -> Vec<String> {
 }
 
 // Opens a serial port by name and baud rate.
-pub fn get_port_handler(port_name: &String, baud_rate: u32) -> Box<dyn SerialPort> {
-    let port;
+pub fn get_port_handler(port_info: &SerialPortInfo) -> TTYPort {
+    let tty_port_result = serialport::new(port_info.port_name.clone(), 115_200)
+        .flow_control(FlowControl::None)
+        .open_native()
+        .map_err(espflash::error::Error::from)
+        .wrap_err_with(|| format!("Failed to open serial port {}", port_info.port_name));
 
-    match serialport::new(port_name.clone(), baud_rate)
-        .timeout(Duration::from_millis(100)) // Set a timeout
-        .open() // Open the port
-    {
-        Ok(_port) => {
-            println!("Serial port {} opened successfully!", port_name);
-            port = _port;
-        }
-        Err(e) => {
-            panic!("Failed to open serial port: {}", e);
+    match tty_port_result {
+        Ok(tty_port) => tty_port,
+        Err(_) => {
+            panic!("Cannot get serial port");
         }
     }
-
-    port
 }
 
-/// Finds the `UsbPortInfo` for a given port name.
-pub fn get_usbport_info(port_name: &str) -> Option<UsbPortInfo> {
+/// Finds the `SerialPortInfo` for a given port name.
+pub fn get_serialport_info(port_name: &str) -> Option<SerialPortInfo> {
     available_ports().ok().and_then(|ports| {
         ports
             .into_iter()
             .find(|port| port.port_name == port_name)
-            .and_then(|port| {
-                if let SerialPortType::UsbPort(usb_info) = port.port_type {
-                    Some(usb_info)
-                } else {
-                    None
-                }
-            })
+            .and_then(|port| Some(port))
     })
+}
+
+// Get the `UsbPortInfo` on a given SerialPortInfo
+pub fn get_usbport_info(port: &SerialPortInfo) -> UsbPortInfo {
+    match &port.port_type {
+        SerialPortType::UsbPort(port) => port.clone(),
+        _ => {
+            panic!("selected a non usb port for serialport usage")
+        }
+    }
 }
