@@ -38,26 +38,30 @@ use std::{
 };
 
 struct Config {
-    wifi_ssid: &'static str,
-    wifi_psk: &'static str,
+    wifi_ssid: String,
+    wifi_psk: String,
 }
 
 fn main() -> Result<()> {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
 
+    // CONFIGURATING FIRMWARE
+    let (wifi_ssid, wifi_psk) = configurator::configure();
+
+    // STARTING HTTP SERVER
     let peripherals = Peripherals::take().unwrap();
     let sysloop = EspSystemEventLoop::take()?;
 
     let app_config = Config {
-        wifi_ssid: "Sercomm08C0",
-        wifi_psk: "GE6HH747Z9QBQ3",
+        wifi_ssid: wifi_ssid,
+        wifi_psk: wifi_psk,
     };
 
     // Connect to the Wi-Fi network
     let _wifi = wifi(
-        app_config.wifi_ssid,
-        app_config.wifi_psk,
+        app_config.wifi_ssid.as_str(),
+        app_config.wifi_psk.as_str(),
         peripherals.modem,
         sysloop,
     )?;

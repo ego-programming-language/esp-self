@@ -1,13 +1,7 @@
-use esp_idf_svc::log::EspLogger;
-use esp_idf_svc::sys::link_patches;
 use log::*;
 use std::io::{BufRead, BufReader, ErrorKind};
 
-fn configure() -> (String, String) {
-    link_patches();
-    EspLogger::initialize_default();
-    info!("Aplicación iniciada");
-
+pub fn configure() -> (String, String) {
     let stdin = std::io::stdin();
     let mut reader = BufReader::new(stdin);
 
