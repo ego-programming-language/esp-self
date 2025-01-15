@@ -13,6 +13,7 @@
 //     vm.run(&vec![]);
 // }
 
+mod configurator;
 mod lib;
 
 use anyhow::Result;
