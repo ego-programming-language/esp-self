@@ -28,7 +28,7 @@ use esp_idf_svc::{
     http::server::{Configuration, EspHttpServer},
     io::{EspIOError, Read},
 };
-use lib::wifi::wifi;
+use lib::{storage::KeyValStore, wifi::wifi};
 use shtcx::{self, shtc3, PowerMode};
 use std::result::Result::Ok;
 use std::{
@@ -45,17 +45,43 @@ struct Config {
 fn main() -> Result<()> {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
+    let namespace = "wifi-config";
+    let mut key_value_store = KeyValStore::new(namespace);
+    let (wifi_ssid, wifi_psk): (String, String) = match key_value_store.get("ssid") {
+        Some(v) => {
+            // GET WIFI CREDENTIALS
+            // from the KeyValueStore (nvs)
+            let psk = key_value_store.get("psk");
+            if psk.is_none() {
+                panic!("Cannot get psk from the nvs")
+            }
+            let psk = String::from_utf8(psk.unwrap()).expect("To get a string");
+            let wifi = String::from_utf8(v).expect("To get a string");
 
-    // CONFIGURATING FIRMWARE
-    let (wifi_ssid, wifi_psk) = configurator::configure();
+            (wifi, psk)
+        }
+        None => {
+            // CONFIGURATING FIRMWARE
+            // get wifi credentials from serialport and then
+            // save it to the KeyValueStore (nvs)
+            let (wifi_ssid, wifi_psk) = configurator::configure();
+            let ssid_result = key_value_store.set("ssid", wifi_ssid.as_bytes());
+            let psk_result = key_value_store.set("psk", wifi_psk.as_bytes());
+            if ssid_result.is_err() | psk_result.is_err() {
+                panic!("Cannot set ssid or psk to nvs")
+            }
+
+            (wifi_ssid, wifi_psk)
+        }
+    };
 
     // STARTING HTTP SERVER
     let peripherals = Peripherals::take().unwrap();
     let sysloop = EspSystemEventLoop::take()?;
 
     let app_config = Config {
-        wifi_ssid: wifi_ssid,
-        wifi_psk: wifi_psk,
+        wifi_ssid,
+        wifi_psk,
     };
 
     // Connect to the Wi-Fi network
