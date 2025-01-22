@@ -1,4 +1,7 @@
 pub mod flash;
+pub mod load;
+
+use load::Load;
 
 use self::flash::Flash;
 
@@ -6,6 +9,7 @@ use std::env;
 
 pub enum Command {
     Flash(Flash),
+    Load(Load),
 }
 
 impl Command {
@@ -24,6 +28,7 @@ impl Command {
     fn cmd_from_str(command: &str, args: Vec<String>) -> Command {
         match command {
             "flash" => Command::Flash(Flash::new(args)),
+            "load" => Command::Load(Load::new(args)),
             _ => {
                 panic!("Unknown command")
             } // if unknown command, assumes it's a .ego file
@@ -34,6 +39,7 @@ impl Command {
             Command::Flash(v) => {
                 let _ = v.exec();
             }
+            Command::Load(v) => v.exec(),
         }
     }
 }

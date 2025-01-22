@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+ego = { git = "https://github.com/ego-programming-language/ego", package = "ego" }
 espflash = { version = "3.2.0", features = ["serialport"] }
 serialport = { version = "4.6.0", default-features = false }
 miette = "7.2.0"
