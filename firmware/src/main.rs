@@ -42,6 +42,8 @@ struct Config {
     wifi_psk: String,
 }
 
+const CLI_ARG_PREFIX: &str = "cli:::"; 
+
 fn main() -> Result<()> {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
@@ -92,6 +94,12 @@ fn main() -> Result<()> {
         sysloop,
     )?;
 
+    let ip = _wifi
+        .sta_netif()
+        .get_ip_info()
+        .expect("Cannot get getted ip");
+    println!("{CLI_ARG_PREFIX}ip:::{:?}", ip.ip);
+
     // `EspHttpServer` instance using a default configuration
     let mut server = EspHttpServer::new(&Configuration::default())?;
 
@@ -108,7 +116,7 @@ fn main() -> Result<()> {
     )?;
 
     server.fn_handler(
-        "/",
+        "/upload",
         Method::Post,
         |mut request| -> core::result::Result<(), EspIOError> {
             if request.header("content-type").unwrap_or("Unknown") != "application/octet-stream" {
