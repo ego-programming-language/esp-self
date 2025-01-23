@@ -1,5 +1,7 @@
 use std::{alloc::System, fs::File, io::Read, path::Path, process::exit};
 
+use reqwest::Url;
+
 pub struct Load {
     args: Vec<String>,
 }
@@ -9,8 +11,8 @@ impl Load {
         Load { args }
     }
     pub fn exec(&self) {
-        if self.args.len() < 1 {
-            println!("A file path is required");
+        if self.args.len() < 2 {
+            println!("Load needs: <filepath> <host>");
             exit(1);
         }
 
@@ -29,5 +31,18 @@ impl Load {
         println!("Compiling '{module_name}' to bytecode...");
         let bytecode = ego::gen_bytecode(module_name, ego_code, &vec![]);
         println!("Bytecode generated");
+
+        // POST the bytecode to the esp32
+        println!("Uploading bytecode to esp32");
+        let host = &self.args[1];
+        let client = reqwest::blocking::Client::new();
+        let url = Url::parse(&format!("{host}/upload")).expect("Cannot parse ip to url format");
+        let response = client
+            .post(url)
+            .header("Content-Type", "application/octet-stream")
+            .body(bytecode)
+            .send()
+            .expect("Cannot get response from host");
+        println!("'-request status: {}", response.status());
     }
 }
