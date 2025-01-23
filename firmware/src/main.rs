@@ -42,7 +42,7 @@ struct Config {
     wifi_psk: String,
 }
 
-const CLI_ARG_PREFIX: &str = "cli:::"; 
+const CLI_ARG_PREFIX: &str = "cli:::";
 
 fn main() -> Result<()> {
     esp_idf_svc::sys::link_patches();
@@ -127,10 +127,6 @@ fn main() -> Result<()> {
                 return Ok(());
             }
 
-            println!(
-                "request from: {:?}",
-                request.header("user-agent").unwrap_or("Unknown")
-            );
             let (_headers, connection) = request.split();
 
             const MAX_BODY_SIZE: usize = 4096; // 4KB
@@ -155,9 +151,12 @@ fn main() -> Result<()> {
                 buffer.extend_from_slice(&temp_buffer[..bytes_read]);
             }
 
-            println!("uploaded bytecode: {:#?}", buffer);
+            println!(
+                "> Executing new uploaded bytecode from {}",
+                request.header("user-agent").unwrap_or("Unknown")
+            );
             let mut vm = self_vm::new(buffer);
-            vm.run(&vec!["-d".to_string()]);
+            vm.run(&vec![]);
 
             let html = templated("post /");
             let mut response = request.into_ok_response()?;
