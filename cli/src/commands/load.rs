@@ -40,6 +40,7 @@ impl Load {
         let response = client
             .post(url)
             .header("Content-Type", "application/octet-stream")
+            .header("User-Agent", "self-esp/cli")
             .body(bytecode)
             .send()
             .expect("Cannot get response from host");
