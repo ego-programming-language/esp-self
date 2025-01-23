@@ -1,15 +1,17 @@
 pub mod flash;
 pub mod load;
+pub mod watch;
 
+use flash::Flash;
 use load::Load;
-
-use self::flash::Flash;
+use watch::Watch;
 
 use std::env;
 
 pub enum Command {
     Flash(Flash),
     Load(Load),
+    Watch(Watch),
 }
 
 impl Command {
@@ -29,6 +31,7 @@ impl Command {
         match command {
             "flash" => Command::Flash(Flash::new(args)),
             "load" => Command::Load(Load::new(args)),
+            "watch" => Command::Watch(Watch::new(args)),
             _ => {
                 panic!("Unknown command")
             } // if unknown command, assumes it's a .ego file
@@ -40,6 +43,7 @@ impl Command {
                 let _ = v.exec();
             }
             Command::Load(v) => v.exec(),
+            Command::Watch(v) => v.exec(),
         }
     }
 }
