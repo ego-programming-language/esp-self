@@ -142,7 +142,7 @@ impl Flash {
             &elf_data,
             FlashData::new(
                 Some(Path::new("bootloader.bin")),
-                Some(Path::new("partition-table.bin")),
+                Some(Path::new("partition-table.csv")),
                 None,
                 None,
                 FlashSettings::default(),
