@@ -1,6 +1,7 @@
 use commands::Command;
 
 mod commands;
+mod core;
 mod flasher;
 mod serial;
 

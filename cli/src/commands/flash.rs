@@ -1,15 +1,12 @@
-use std::{
-    fs,
-    io::{self, Write},
-    path::{Path, PathBuf},
-    usize,
-};
+use std::io;
+use std::{fs, io::Write};
+use std::{process::exit, usize};
 
-use crate::flasher::print_board_info;
 use crate::serial::{
     detect_usb_serial_ports, get_port_handler, get_serial_ports_name, get_serialport_info,
     get_usbport_info,
 };
+use crate::{core::temp_file::TempFile, flasher::print_board_info};
 use espflash::{
     cli::flash_elf_image,
     connection::reset::{ResetAfterOperation::HardReset, ResetBeforeOperation::DefaultReset},
@@ -18,6 +15,7 @@ use espflash::{
 };
 use indicatif::{ProgressBar, ProgressStyle};
 use miette::{Error, IntoDiagnostic};
+use tempfile::{Builder, NamedTempFile};
 
 #[derive(Default)]
 pub struct EspflashProgress {
@@ -53,6 +51,10 @@ impl ProgressCallbacks for EspflashProgress {
         }
     }
 }
+
+const ELF_DATA: &[u8] = include_bytes!("../../self-esp");
+const BOOTLOADER_BIN: &[u8] = include_bytes!("../../bootloader.bin");
+const PARTITION_TABLE_CSV: &[u8] = include_bytes!("../../partition-table.csv");
 
 pub struct Flash {
     args: Vec<String>,
@@ -134,30 +136,61 @@ impl Flash {
 
         flasher.disable_watchdog()?;
 
-        // Read the ELF data from the build path and load it to the target.
-        let elf_data = fs::read("./self-esp").into_diagnostic()?;
+        // create temp file for reading firmware files (elf, partition table and bootloader)
+        let elf = Flash::initialize_firmware_files("program", ".elf", ELF_DATA);
+        let bootloader = Flash::initialize_firmware_files("bootloader", ".bin", BOOTLOADER_BIN);
+        let partition_table =
+            Flash::initialize_firmware_files("partable", ".csv", PARTITION_TABLE_CSV);
 
-        let flash_result = flash_elf_image(
-            &mut flasher,
-            &elf_data,
-            FlashData::new(
-                Some(Path::new("bootloader.bin")),
-                Some(Path::new("partition-table.csv")),
-                None,
-                None,
-                FlashSettings::default(),
-                0,
-            )
-            .into_diagnostic()?,
-            target_xtal_freq,
-        );
+        let flash_data = FlashData::new(
+            Some(bootloader.path),
+            Some(partition_table.path),
+            None,
+            None,
+            FlashSettings::default(),
+            0,
+        )
+        .expect("error generating flash data");
+
+        let elf_data = fs::read(elf.path).into_diagnostic()?;
+        let flash_result = flash_elf_image(&mut flasher, &elf_data, flash_data, target_xtal_freq);
 
         match flash_result {
             Ok(_) => println!("Flash finished!"),
-            Err(_) => panic!("Cannot flash device"),
+            Err(err) => panic!("Cannot flash device {}", err),
         }
 
         Ok(())
+    }
+
+    fn initialize_firmware_files(filename: &str, extension: &str, data: &[u8]) -> TempFile {
+        let mut temp_file = match Builder::new()
+            .prefix(filename)
+            .suffix(extension)
+            .rand_bytes(5)
+            .tempfile()
+        {
+            Ok(v) => v,
+            Err(err) => {
+                eprintln!("Error initializing temporal files {}", err);
+                exit(1)
+            }
+        };
+
+        if let Err(err) = temp_file.write_all(data) {
+            eprintln!("Error writting temporal files: {}", err);
+            exit(1);
+        }
+
+        // Box::leak to convert the PathBuf to 'static lifetime.
+        let path = temp_file.path().to_path_buf();
+        let static_path = Box::leak(Box::new(path)).as_path();
+
+        // Maintain file in scope
+        TempFile {
+            _file: temp_file,
+            path: static_path,
+        }
     }
 }
 
