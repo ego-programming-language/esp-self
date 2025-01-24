@@ -1,9 +1,40 @@
-use std::time::Duration;
+use std::{
+    io::{self, Write},
+    time::Duration,
+};
 
 use miette::{Context, IntoDiagnostic, Result};
 use serialport::{
     available_ports, FlowControl, SerialPort, SerialPortInfo, SerialPortType, TTYPort, UsbPortInfo,
 };
+
+pub fn serial_port_selector() -> String {
+    let ports = match detect_usb_serial_ports(true) {
+        Ok(ports) => ports,
+        Err(_) => panic!("Cannot get ports"),
+    };
+    let port_names = get_serial_ports_name(&ports);
+
+    port_names
+        .iter()
+        .enumerate()
+        .for_each(|(i, port)| println!("[{i}] {port}"));
+
+    print!("> ");
+    io::stdout().flush().expect("Failed to flush stdout");
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Failed to read line");
+
+    let input = input.trim();
+    let selected_port = input
+        .parse::<usize>()
+        .expect("Input must be a number within the options range");
+
+    port_names[selected_port].clone()
+}
 
 // Returns a vector with available USB serial ports.
 #[cfg(not(all(target_os = "linux", target_env = "musl")))]

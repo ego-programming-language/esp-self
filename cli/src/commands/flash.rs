@@ -4,7 +4,7 @@ use std::{process::exit, usize};
 
 use crate::serial::{
     detect_usb_serial_ports, get_port_handler, get_serial_ports_name, get_serialport_info,
-    get_usbport_info,
+    get_usbport_info, serial_port_selector,
 };
 use crate::{core::temp_file::TempFile, flasher::print_board_info};
 use espflash::{
@@ -70,33 +70,10 @@ impl Flash {
 
         /////// GET USER INPUT FOR SERIALPORT
         ///////
-        let ports = match detect_usb_serial_ports(true) {
-            Ok(ports) => ports,
-            Err(_) => panic!("Cannot get ports"),
-        };
-        let port_names = get_serial_ports_name(&ports);
-
-        port_names
-            .iter()
-            .enumerate()
-            .for_each(|(i, port)| println!("[{i}] {port}"));
-
-        print!("> ");
-        io::stdout().flush().expect("Failed to flush stdout");
-
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read line");
-
-        let input = input.trim();
-        let selected_port = input
-            .parse::<usize>()
-            .expect("Input must be a number within the options range");
+        let port_name = serial_port_selector();
 
         /////// GET SERIALPORT
         ///////
-        let port_name = port_names[selected_port].clone();
         let serialport_info = match get_serialport_info(&port_name) {
             Some(info) => info,
             None => {
